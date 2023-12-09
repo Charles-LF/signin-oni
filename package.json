@@ -1,7 +1,7 @@
 {
   "name": "koishi-plugin-signin-oni",
   "description": "<自用签到>到处超的代码,学习下数据库的使用",
-  "version": "0.0.1",
+  "version": "1.0.1",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [
@@ -9,7 +9,6 @@
     "dist"
   ],
   "license": "MIT",
-  "scripts": {},
   "keywords": [
     "chatbot",
     "koishi",
