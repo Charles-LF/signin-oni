@@ -3,29 +3,16 @@ import { sendMarkdown } from "./sendMarkdown";
 
 export const name = "signin-oni";
 
-export const usage = `## 乱写(划掉)抄的签到,配合贼吉尔丑的图,将就着用`;
+export const usage = `## 乱写(划掉)抄的签到,配合贼吉尔丑的图,将就着用\n
+  - 1.0.5 一言请求失败时不在发生无法签到的情况(
+`;
 
+// 定义数据库格式
 declare module "koishi" {
   interface Tables {
     signin_oni: db;
   }
 }
-
-export interface db {
-  id: string;
-  userName: string;
-  onegold: number;
-  gold: number;
-  allDay: number;
-  time: string;
-  yiyan: string;
-}
-declare module "koishi" {
-  interface Tables {
-    signin_oni: db;
-  }
-}
-
 export interface db {
   id: string;
   userName: string;
@@ -36,9 +23,11 @@ export interface db {
   yiyan: string;
   imgNum: number;
 }
+
+// koishi 自定义配置
 export interface Config {
-  gold: number;
   imgUrl: string;
+  maxGold: number;
   yiyanapi: string;
   eryan: string;
   appId: string;
@@ -47,12 +36,9 @@ export interface Config {
   keyboardId: string;
   imgMax: number;
 }
-
 export const Config: Schema<Config> = Schema.object({
-  gold: Schema.number().default(10).description("签到最多得到多少金币"),
-  imgUrl: Schema.string()
-    .default("https://kleiforums.s3.amazonaws.com/gameimages/457140-image.jpg")
-    .description("签到时使用的顶部图片地址"),
+  imgUrl: Schema.string().description("签到时使用的顶部图片地址"),
+  maxGold: Schema.number().default(10).description("签到最多得到多少金币"),
   yiyanapi: Schema.string()
     .default("https://v.api.aa1.cn/api/yiyan/index.php")
     .description("一言请求的api"),
@@ -75,12 +61,12 @@ export function apply(ctx: Context, config: Config) {
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36";
   // 冒泡
   ctx
-    .command("signin 冒泡")
+    .command("signin", "打卡冒泡咯")
     .alias("冒泡")
     .action(async ({ session }) => {
       const logger = ctx.logger("signin-oni");
 
-      //创建数据表名
+      //创建数据表
       ctx.database.extend(
         "signin_oni",
         {
@@ -101,59 +87,63 @@ export function apply(ctx: Context, config: Config) {
       let userId = session.userId;
       let user_name = session.username;
       let signin_Time = Time.template("yyyy-MM-dd hh:mm:ss", new Date());
-      let signin_gold: number = Random.int(1, config.gold);
+      let signin_gold: number = Random.int(1, config.maxGold);
 
       // 查数据库中用户的ID
       const user_file = await ctx.database.get("signin_oni", { id: userId });
 
       if (user_file.length === 0) {
         // 木找到
-        await ctx.http
+        let yiyan = await ctx.http
           .get(config.yiyanapi, {
             headers: { "User-Agent": userAgent },
           })
           .then(async (res: string) => {
             res = res.replace("<p>", "").replace("</p>", "");
-            const imgNum = Random.int(1, config.imgMax);
-            await ctx.database.upsert(
-              "signin_oni",
-              [
-                {
-                  id: userId,
-                  userName: user_name,
-                  onegold: signin_gold,
-                  gold: signin_gold,
-                  allDay: 1,
-                  time: signin_Time,
-                  yiyan: res,
-                  imgNum: imgNum,
-                },
-              ],
-              ["id"]
-            );
-            logger.info(
-              `用户${user_name}.${userId}第一次签到,写入数据库成功....`
-            );
-            await sendMarkdown(
-              session.channelId,
-              config.appId,
-              config.token,
-              config.templateId,
-              {
-                imgurl: config.imgUrl + `${imgNum}.jpg`,
-                userid: session.userId,
-                yiyan: res,
-                allday: "1",
-                onegold: signin_gold.toString(),
-                allgold: signin_gold.toString(),
-                eryan: config.eryan,
-              },
-              config.keyboardId
-            );
+            return res;
           })
           .catch((err) => {
-            logger.error(err);
+            console.log(err);
+            return "今天,也要多喝热水哟(";
           });
+        // 获取图片的ID
+        const imgNum: number = Random.int(1, config.imgMax);
+
+        //更新数据库
+        await ctx.database.upsert(
+          "signin_oni",
+          [
+            {
+              id: userId,
+              userName: user_name,
+              onegold: signin_gold,
+              gold: signin_gold,
+              allDay: 1,
+              time: signin_Time,
+              yiyan: yiyan,
+              imgNum: imgNum,
+            },
+          ],
+          ["id"]
+        );
+
+        logger.info(`用户${user_name}.${userId}第一次签到,写入数据库成功....`);
+        await sendMarkdown(
+          session.channelId,
+          config.appId,
+          config.token,
+          config.templateId,
+          {
+            imgurl: config.imgUrl + `${imgNum}.jpg`,
+            userid: session.userId,
+            yiyan: yiyan,
+            allday: "1",
+            onegold: signin_gold.toString(),
+            allgold: signin_gold.toString(),
+            eryan: config.eryan,
+          },
+          config.keyboardId
+        );
       } else {
         // 找到了
 
@@ -168,50 +158,53 @@ export function apply(ctx: Context, config: Config) {
         // 时间不一样,给签
         if (signin_Time.slice(8, 10) != timeCont.slice(8, 10)) {
           const imgNum2 = Random.int(1, config.imgMax);
-          await ctx.http
-            .get(config.yiyanapi)
-            .then(async (res) => {
+          let yiyan = await ctx.http
+            .get(config.yiyanapi, {
+              headers: { "User-Agent": userAgent },
+            })
+            .then(async (res: string) => {
               res = res.replace("<p>", "").replace("</p>", "");
-              await ctx.database.upsert(
-                "signin_oni",
-                [
-                  {
-                    id: userId,
-                    onegold: signin_gold,
-                    gold: goldCont + signin_gold,
-                    allDay: allDay + 1,
-                    time: signin_Time,
-                    yiyan: res,
-                    imgNum: imgNum2,
-                  },
-                ],
-                ["id"]
-              );
-              logger.info(
-                `用户${user_name}.${userId}第${
-                  allDay + 1
-                }天签到,写入数据库成功....`
-              );
-              await sendMarkdown(
-                session.channelId,
-                config.appId,
-                config.token,
-                config.templateId,
-                {
-                  imgurl: config.imgUrl + `${imgNum2}.jpg`,
-                  userid: session.userId,
-                  yiyan: res,
-                  allday: (allDay + 1).toString(),
-                  onegold: signin_gold.toString(),
-                  allgold: (goldCont + signin_gold).toString(),
-                  eryan: config.eryan,
-                },
-                config.keyboardId
-              );
+              return res;
             })
             .catch((err) => {
-              logger.error(err);
+              console.log(err);
+              return "今天,也要多喝热水哟(";
             });
+
+          await ctx.database.upsert(
+            "signin_oni",
+            [
+              {
+                id: userId,
+                onegold: signin_gold,
+                gold: goldCont + signin_gold,
+                allDay: allDay + 1,
+                time: signin_Time,
+                yiyan: yiyan,
+                imgNum: imgNum2,
+              },
+            ],
+            ["id"]
+          );
+          logger.info(
+            `用户${user_name}.${userId}第${allDay + 1}天签到,写入数据库成功....`
+          );
+          await sendMarkdown(
+            session.channelId,
+            config.appId,
+            config.token,
+            config.templateId,
+            {
+              imgurl: config.imgUrl + `${imgNum2}.jpg`,
+              userid: session.userId,
+              yiyan: yiyan,
+              allday: (allDay + 1).toString(),
+              onegold: signin_gold.toString(),
+              allgold: (goldCont + signin_gold).toString(),
+              eryan: config.eryan,
+            },
+            config.keyboardId
+          );
         } else {
           // 时间一样,不给签
           logger.error(`用户${user_name}.${userId}今天已经签到过了`);
