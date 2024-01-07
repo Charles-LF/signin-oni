@@ -59,30 +59,29 @@ export const Config: Schema<Config> = Schema.object({
 export function apply(ctx: Context, config: Config) {
   const userAgent =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36";
+  //创建数据表
+  ctx.model.extend(
+    "signin_oni",
+    {
+      id: "string",
+      userName: "string",
+      onegold: "integer",
+      gold: "integer",
+      allDay: "integer",
+      time: "string",
+      yiyan: "string",
+      imgNum: "integer",
+    },
+    {
+      unique: ["id"],
+    }
+  );
   // 冒泡
   ctx
     .command("signin", "打卡冒泡咯")
     .alias("冒泡")
     .action(async ({ session }) => {
       const logger = ctx.logger("signin-oni");
-
-      //创建数据表
-      ctx.database.extend(
-        "signin_oni",
-        {
-          id: "string",
-          userName: "string",
-          onegold: "integer",
-          gold: "integer",
-          allDay: "integer",
-          time: "string",
-          yiyan: "string",
-          imgNum: "integer",
-        },
-        {
-          unique: ["id"],
-        }
-      );
 
       let userId = session.userId;
       let user_name = session.username;
